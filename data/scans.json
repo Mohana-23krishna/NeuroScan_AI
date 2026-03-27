@@ -1,0 +1,32 @@
+[
+  {
+    "diagnosis": "meningioma",
+    "confidence": 0.9989773035049438,
+    "all_probs": [
+      6.0296324591035955e-06,
+      0.9989773035049438,
+      0.00038929434958845377,
+      0.0006274034385569394
+    ],
+    "date": "2026-03-26 20:21",
+    "operator": "Mohana",
+    "patient_name": "Manohar",
+    "doctor_notes": "",
+    "id": "SCN0001"
+  },
+  {
+    "diagnosis": "glioma",
+    "confidence": 0.9895046949386597,
+    "all_probs": [
+      0.9895046949386597,
+      0.009525406174361706,
+      0.0008269678219221532,
+      0.00014286747318692505
+    ],
+    "date": "2026-03-27 08:18",
+    "operator": "Satya",
+    "patient_name": "Anjali Mehta",
+    "doctor_notes": "",
+    "id": "SCN0002"
+  }
+]
