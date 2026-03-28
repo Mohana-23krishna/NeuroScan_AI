@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-import seaborn as sns
 from PIL import Image, ImageEnhance
 import random
 import json
@@ -45,10 +44,13 @@ def hash_pw(pw):
 
 # ── Session State Init ─────────────────────────────────────────────────────────
 for k, v in [
-    ("logged_in",  False),
-    ("username",   ""),
-    ("auth_mode",  "login"),
-    ("last_scan",  None),
+    ("logged_in",         False),
+    ("username",          ""),
+    ("auth_mode",         "login"),
+    ("last_scan",         None),
+    ("confirm_delete",    None),
+    ("confirm_del_pat",   None),
+    ("editing_patient",   None),
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -227,7 +229,6 @@ div.stButton > button:hover {
 .stProgress > div > div {
   background: linear-gradient(90deg, #006680, #00e5ff) !important; border-radius: 4px;
 }
-
 .stImage img { border: 1px solid var(--border); border-radius: 10px; }
 .stSpinner > div { border-top-color: var(--cyan) !important; }
 
@@ -280,10 +281,16 @@ iframe[title="st.dataframe"] { background: var(--surface) !important; }
 
 .stRadio > label { color: var(--muted) !important; }
 .stRadio [data-testid="stMarkdownContainer"] p { color: var(--white) !important; }
+
+/* edit panel */
+.edit-panel {
+  background: #0d1828; border: 1px solid var(--cyan);
+  border-radius: 12px; padding: 1.4rem; margin: .6rem 0 1rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Matplotlib Dark Theme Helper ──────────────────────────────────────────────
+# ── Matplotlib Dark Theme ──────────────────────────────────────────────────────
 def dark_fig(w=7, h=4):
     fig, ax = plt.subplots(figsize=(w, h))
     for obj in (fig, ax):
@@ -304,14 +311,6 @@ def augment_image(image):
     image = ImageEnhance.Contrast(image).enhance(random.uniform(0.8, 1.2))
     return np.array(image) / 255.0
 
-def open_images(paths, augment=False):
-    from tensorflow.keras.preprocessing.image import load_img, img_to_array
-    out = []
-    for p in paths:
-        arr = img_to_array(load_img(p, target_size=(IMAGE_SIZE, IMAGE_SIZE)))
-        out.append(augment_image(arr) if augment else arr / 255.0)
-    return np.array(out)
-
 def load_dataset_paths(data_dir):
     paths, labels = [], []
     if not os.path.exists(data_dir):
@@ -325,9 +324,6 @@ def load_dataset_paths(data_dir):
                 paths.append(os.path.join(d, f))
                 labels.append(cls)
     return paths, labels
-
-def encode_label(labels, c2i):
-    return np.array([c2i[l] for l in labels])
 
 @st.cache_resource
 def build_model(num_classes):
@@ -378,11 +374,26 @@ def load_saved_model(path):
         model.load_weights(path)
         return model
     except Exception as final_err:
-        raise RuntimeError(
-            f"Could not load model after three attempts.\n\nRoot cause: {final_err}\n\n"
-            f"Deployment is running TF {tf.__version__}. The most reliable fix is "
-            f"to re-save your model.h5 locally using TF 2.16.1:\n  model.save('model.h5')"
-        )
+        raise RuntimeError(f"Could not load model: {final_err}")
+
+# ── Delete helpers ─────────────────────────────────────────────────────────────
+def delete_scan(scan_id, scans, patients):
+    scans[:] = [s for s in scans if s.get("id") != scan_id]
+    for p in patients:
+        if "scans" in p and scan_id in p["scans"]:
+            p["scans"].remove(scan_id)
+    save_data("scans.json", scans)
+    save_data("patients.json", patients)
+
+def delete_patient(patient_id, patients, scans):
+    pat = next((p for p in patients if p.get("id") == patient_id), None)
+    if pat:
+        # Remove all scans belonging to this patient
+        scans[:] = [s for s in scans if s.get("patient_name") != pat["name"]]
+        save_data("scans.json", scans)
+    patients[:] = [p for p in patients if p.get("id") != patient_id]
+    save_data("patients.json", patients)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  AUTH PAGE
@@ -434,14 +445,14 @@ def show_auth():
                 st.session_state.auth_mode = "signup"
                 st.rerun()
 
-        else:  # signup
+        else:
             st.markdown("""
             <div class="login-card">
               <div class="login-title">✨ CREATE ACCOUNT</div>
               <div class="login-sub">Join the NeuroScan AI platform</div>
             </div>
             """, unsafe_allow_html=True)
-            s1, s2 = st.columns(2)
+            s1, s2      = st.columns(2)
             new_uname   = s1.text_input("Username",  placeholder="Choose username")
             new_name    = s2.text_input("Full Name",  placeholder="Your full name")
             new_role    = st.selectbox("Role", ["Radiologist", "Doctor", "Technician", "Admin"])
@@ -450,17 +461,13 @@ def show_auth():
 
             if st.button("✨  Create Account", use_container_width=True):
                 if not all([new_uname, new_name, new_pwd, conf_pwd]):
-                    st.markdown('<div class="rbox r-amber">⚠ All fields are required.</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="rbox r-amber">⚠ All fields are required.</div>', unsafe_allow_html=True)
                 elif new_uname in users:
-                    st.markdown('<div class="rbox r-red">❌ Username already taken.</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="rbox r-red">❌ Username already taken.</div>', unsafe_allow_html=True)
                 elif new_pwd != conf_pwd:
-                    st.markdown('<div class="rbox r-red">❌ Passwords do not match.</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="rbox r-red">❌ Passwords do not match.</div>', unsafe_allow_html=True)
                 elif len(new_pwd) < 6:
-                    st.markdown('<div class="rbox r-amber">⚠ Password must be at least 6 characters.</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="rbox r-amber">⚠ Password must be at least 6 characters.</div>', unsafe_allow_html=True)
                 else:
                     users[new_uname] = {
                         "name": new_name, "role": new_role,
@@ -468,8 +475,7 @@ def show_auth():
                         "created": datetime.now().isoformat()
                     }
                     save_data("users.json", users)
-                    st.markdown('<div class="rbox r-green">✅ Account created! Please sign in.</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="rbox r-green">✅ Account created! Please sign in.</div>', unsafe_allow_html=True)
                     st.session_state.auth_mode = "login"
                     st.rerun()
 
@@ -489,7 +495,7 @@ def show_app():
     patients  = load_data("patients.json", [])
     scans     = load_data("scans.json", [])
 
-    # ── Top sticky bar ────────────────────────────────────────────────────────
+    # ── Top bar ───────────────────────────────────────────────────────────────
     tb1, tb2 = st.columns([5, 1])
     with tb1:
         st.markdown(f"""
@@ -512,7 +518,7 @@ def show_app():
             st.session_state.username  = ""
             st.rerun()
 
-    # ── Hero ─────────────────────────────────────────────────────────────────
+    # ── Hero ──────────────────────────────────────────────────────────────────
     st.markdown("""
     <div class="hero-wrap" style="padding:2.4rem 1rem 1.8rem">
       <div class="hero-glow"></div>
@@ -529,18 +535,14 @@ def show_app():
     <div class="divider"></div>
     """, unsafe_allow_html=True)
 
-    # ── Tabs ──────────────────────────────────────────────────────────────────
     t1, t2, t3, t4, t5 = st.tabs([
-        "🏠  Home",
-        "🔍  Scan Analysis",
-        "👥  Patient Records",
-        "📋  Patient Reports",
-        "📊  Dashboard",
+        "🏠  Home", "🔍  Scan Analysis",
+        "👥  Patient Records", "📋  Patient Reports", "📊  Dashboard",
     ])
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     #  TAB 1 — HOME
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     with t1:
         st.markdown('<div class="sec">🏥 Centre Overview</div>', unsafe_allow_html=True)
 
@@ -548,14 +550,13 @@ def show_app():
         total_s  = len(scans)
         tumor_s  = sum(1 for s in scans if s.get("diagnosis") != "notumor")
         clear_s  = total_s - tumor_s
-        det_rate = (tumor_s / total_s * 100) if total_s > 0 else 0
 
         c1, c2, c3, c4 = st.columns(4)
         for col, icon, num, label in [
-            (c1, "👥", total_p,  "Total Patients"),
-            (c2, "🔬", total_s,  "Scans Processed"),
-            (c3, "🔴", tumor_s,  "Tumors Detected"),
-            (c4, "✅", clear_s,  "Clear Scans"),
+            (c1, "👥", total_p, "Total Patients"),
+            (c2, "🔬", total_s, "Scans Processed"),
+            (c3, "🔴", tumor_s, "Tumors Detected"),
+            (c4, "✅", clear_s, "Clear Scans"),
         ]:
             col.markdown(f"""
             <div class="stat-card">
@@ -566,8 +567,6 @@ def show_app():
             """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-
-        # ── Recent Scans (full width now, System Info removed) ────────────
         st.markdown('<div class="sec">🕐 Recent Scans</div>', unsafe_allow_html=True)
         recent = sorted(scans, key=lambda x: x.get("date", ""), reverse=True)[:6]
         if recent:
@@ -605,13 +604,12 @@ def show_app():
         st.markdown("""
         <div class="rbox r-cyan" style="font-size:.82rem;margin-top:1rem">
           💡 Go to <strong>Scan Analysis</strong> to upload an MRI and run AI detection.
-          Save results directly to patient records.
         </div>
         """, unsafe_allow_html=True)
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     #  TAB 2 — SCAN ANALYSIS
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     with t2:
         st.markdown('<div class="sec">🔍 MRI Scan Analysis</div>', unsafe_allow_html=True)
         left, right = st.columns([1, 1], gap="large")
@@ -629,9 +627,8 @@ def show_app():
         with right:
             if uploaded:
                 if not os.path.exists(model_path):
-                    st.markdown(
-                        f'<div class="rbox r-red">⚠ Model <code>{model_path}</code> not found. Train first.</div>',
-                        unsafe_allow_html=True)
+                    st.markdown(f'<div class="rbox r-red">⚠ Model <code>{model_path}</code> not found.</div>',
+                                unsafe_allow_html=True)
                 else:
                     try:
                         from tensorflow.keras.preprocessing.image import load_img, img_to_array
@@ -644,8 +641,7 @@ def show_app():
                         label = CLASS_LABELS[idx]
 
                         st.session_state.last_scan = {
-                            "diagnosis":  label,
-                            "confidence": conf,
+                            "diagnosis":  label, "confidence": conf,
                             "all_probs":  preds[0].tolist(),
                             "date":       datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "operator":   st.session_state.username,
@@ -654,52 +650,35 @@ def show_app():
                         st.markdown('<div class="card"><div class="card-label">Confidence Scores</div>',
                                     unsafe_allow_html=True)
                         fig, ax = dark_fig(5, 2.8)
-                        colors = ['#00e5ff'] * 4
+                        colors  = ['#00e5ff'] * 4
                         colors[idx] = '#00e676' if label == 'notumor' else '#ff4d6d'
                         bars = ax.barh(CLASS_LABELS, preds[0], color=colors, height=0.5)
-                        ax.set_xlim(0, 1)
-                        ax.set_xlabel("Confidence", fontsize=9)
+                        ax.set_xlim(0, 1); ax.set_xlabel("Confidence", fontsize=9)
                         for bar, v in zip(bars, preds[0]):
                             ax.text(v + .01, bar.get_y() + bar.get_height() / 2,
-                                    f'{v * 100:.1f}%', va='center', color='#6a8a9a', fontsize=8)
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close()
+                                    f'{v*100:.1f}%', va='center', color='#6a8a9a', fontsize=8)
+                        plt.tight_layout(); st.pyplot(fig); plt.close()
                         st.markdown('</div>', unsafe_allow_html=True)
 
                         if label == "notumor":
-                            st.markdown(
-                                f'<div class="rbox r-green">✅ No Tumor Detected &nbsp;·&nbsp; Confidence: {conf*100:.1f}%</div>',
-                                unsafe_allow_html=True)
-                            st.markdown(
-                                '<div class="rbox r-cyan">💡 You\'re clear! Maintain healthy habits and regular check-ups.</div>',
-                                unsafe_allow_html=True)
+                            st.markdown(f'<div class="rbox r-green">✅ No Tumor Detected &nbsp;·&nbsp; Confidence: {conf*100:.1f}%</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-cyan">💡 You\'re clear! Maintain healthy habits.</div>', unsafe_allow_html=True)
                         else:
                             box_cls = "r-amber" if conf < 0.6 else "r-red"
                             tag     = "⚠️ Low Confidence" if conf < 0.6 else "🔴 High Confidence"
-                            st.markdown(
-                                f'<div class="rbox {box_cls}">{tag} &nbsp;·&nbsp; Tumor: <strong>{label.upper()}</strong> &nbsp;·&nbsp; {conf*100:.1f}%</div>',
-                                unsafe_allow_html=True)
-                            st.markdown(
-                                '<div class="rbox r-amber">⚕️ Consult a neurologist immediately for proper diagnosis.</div>',
-                                unsafe_allow_html=True)
-                            st.markdown(
-                                '<div class="rbox r-cyan">💡 Healthy diet &nbsp;·&nbsp; Reduce stress &nbsp;·&nbsp; Follow doctor\'s advice &nbsp;·&nbsp; No self-medication</div>',
-                                unsafe_allow_html=True)
+                            st.markdown(f'<div class="rbox {box_cls}">{tag} &nbsp;·&nbsp; Tumor: <strong>{label.upper()}</strong> &nbsp;·&nbsp; {conf*100:.1f}%</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-amber">⚕️ Consult a neurologist immediately.</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-cyan">💡 Healthy diet &nbsp;·&nbsp; Reduce stress &nbsp;·&nbsp; Follow doctor\'s advice</div>', unsafe_allow_html=True)
 
                     except Exception as e:
-                        st.markdown(
-                            f'<div class="rbox r-red">❌ Model load failed: <code>{str(e)}</code></div>',
-                            unsafe_allow_html=True)
+                        st.markdown(f'<div class="rbox r-red">❌ Model load failed: <code>{str(e)}</code></div>', unsafe_allow_html=True)
             else:
                 st.markdown(
                     '<div class="empty-state">'
                     '<span style="font-size:2.8rem;opacity:.25">🧠</span>'
                     '<p style="color:#6a8a9a;font-size:.9rem;margin:0">Upload an MRI scan to begin analysis</p>'
-                    '</div>',
-                    unsafe_allow_html=True)
+                    '</div>', unsafe_allow_html=True)
 
-        # ── Save to Patient Record ─────────────────────────────────────────
         if st.session_state.last_scan and uploaded:
             st.markdown('<div class="sec">💾 Save Scan to Patient Record</div>', unsafe_allow_html=True)
             with st.expander("📁 Link this scan to a patient record", expanded=False):
@@ -708,9 +687,8 @@ def show_app():
 
                 if save_mode == "Existing Patient":
                     if patient_names:
-                        sel_patient  = st.selectbox("Select Patient", patient_names, key="save_sel")
-                        doctor_note  = st.text_area("Doctor Notes (optional)",
-                                                    placeholder="Add clinical observations…", key="save_note_ex")
+                        sel_patient = st.selectbox("Select Patient", patient_names, key="save_sel")
+                        doctor_note = st.text_area("Doctor Notes (optional)", placeholder="Add clinical observations…", key="save_note_ex")
                         if st.button("💾  Save Scan"):
                             scan_entry = {
                                 **st.session_state.last_scan,
@@ -724,22 +702,18 @@ def show_app():
                                 if p["name"] == sel_patient:
                                     p.setdefault("scans", []).append(scan_entry["id"])
                             save_data("patients.json", patients)
-                            st.markdown('<div class="rbox r-green">✅ Scan saved to patient record!</div>',
-                                        unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-green">✅ Scan saved!</div>', unsafe_allow_html=True)
                             st.session_state.last_scan = None
                     else:
-                        st.markdown('<div class="rbox r-cyan">No existing patients. Use "New Patient" to add one.</div>',
-                                    unsafe_allow_html=True)
-
-                else:  # New Patient
+                        st.markdown('<div class="rbox r-cyan">No existing patients. Use "New Patient".</div>', unsafe_allow_html=True)
+                else:
                     n1, n2 = st.columns(2)
-                    np_name    = n1.text_input("Patient Name",    key="np_name")
+                    np_name    = n1.text_input("Patient Name", key="np_name")
                     np_age     = n2.number_input("Age", 1, 120, 30, key="np_age")
                     n3, n4     = st.columns(2)
                     np_gender  = n3.selectbox("Gender", ["Male", "Female", "Other"], key="np_gender")
-                    np_contact = n4.text_input("Contact",         key="np_contact")
-                    doctor_note= st.text_area("Doctor Notes (optional)",
-                                              placeholder="Add clinical observations…", key="save_note_new")
+                    np_contact = n4.text_input("Contact", key="np_contact")
+                    doctor_note= st.text_area("Doctor Notes (optional)", placeholder="Add clinical observations…", key="save_note_new")
                     if st.button("💾  Save & Add Patient"):
                         if np_name:
                             pid        = f"PAT{len(patients)+1:04d}"
@@ -758,20 +732,18 @@ def show_app():
                                 "scans": [scan_entry["id"]],
                             })
                             save_data("patients.json", patients)
-                            save_data("scans.json",    scans)
-                            st.markdown('<div class="rbox r-green">✅ Patient added and scan saved!</div>',
-                                        unsafe_allow_html=True)
+                            save_data("scans.json", scans)
+                            st.markdown('<div class="rbox r-green">✅ Patient added and scan saved!</div>', unsafe_allow_html=True)
                             st.session_state.last_scan = None
                         else:
-                            st.markdown('<div class="rbox r-amber">⚠ Patient name is required.</div>',
-                                        unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-amber">⚠ Patient name is required.</div>', unsafe_allow_html=True)
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     #  TAB 3 — PATIENT RECORDS
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     with t3:
         st.markdown('<div class="sec">👥 Patient Records</div>', unsafe_allow_html=True)
-        pr_left, pr_right = st.columns([1.6, 1], gap="large")
+        pr_left, pr_right = st.columns([1.7, 1], gap="large")
 
         with pr_left:
             search = st.text_input("🔍 Search by name or ID", placeholder="Type to filter…")
@@ -780,7 +752,7 @@ def show_app():
                         search.lower() in p.get("id", "").lower()
                        ] if search else patients
 
-            st.markdown(f'<div style="color:var(--muted);font-size:.78rem;margin-bottom:.5rem">'
+            st.markdown(f'<div style="color:var(--muted);font-size:.78rem;margin-bottom:.6rem">'
                         f'{len(filtered)} patient(s) found</div>', unsafe_allow_html=True)
 
             if not filtered:
@@ -792,10 +764,13 @@ def show_app():
                 """, unsafe_allow_html=True)
             else:
                 for p in filtered:
+                    pid       = p.get("id", "")
                     p_scans   = [s for s in scans if s.get("patient_name") == p["name"]]
                     last_diag = p_scans[-1]["diagnosis"] if p_scans else "—"
                     d_color   = ("#00e676" if last_diag == "notumor"
                                  else ("#ff4d6d" if last_diag != "—" else "#6a8a9a"))
+
+                    # ── Patient row info ──────────────────────────────────
                     st.markdown(f"""
                     <div class="patient-row">
                       <div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;
@@ -807,8 +782,8 @@ def show_app():
                       <div style="flex:1;min-width:0">
                         <div style="font-weight:500;color:var(--white)">{p['name']}</div>
                         <div style="font-size:.74rem;color:var(--muted)">
-                          {p.get('id','')} &nbsp;·&nbsp; Age {p.get('age','')} &nbsp;·&nbsp; {p.get('gender','')}
-                          &nbsp;·&nbsp; Registered: {p.get('registered','')}
+                          {pid} &nbsp;·&nbsp; Age {p.get('age','')} &nbsp;·&nbsp;
+                          {p.get('gender','')} &nbsp;·&nbsp; Registered: {p.get('registered','')}
                         </div>
                       </div>
                       <div style="text-align:right;flex-shrink:0">
@@ -820,6 +795,106 @@ def show_app():
                     </div>
                     """, unsafe_allow_html=True)
 
+                    # ── Action buttons row ────────────────────────────────
+                    btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
+                    with btn_col1:
+                        if st.button("✏️ Update", key=f"edit_btn_{pid}"):
+                            # Toggle edit panel
+                            if st.session_state.editing_patient == pid:
+                                st.session_state.editing_patient = None
+                            else:
+                                st.session_state.editing_patient = pid
+                                st.session_state.confirm_del_pat = None
+                            st.rerun()
+
+                    with btn_col2:
+                        if st.button("🗑️ Delete", key=f"delbtn_{pid}"):
+                            if st.session_state.confirm_del_pat == pid:
+                                st.session_state.confirm_del_pat = None
+                            else:
+                                st.session_state.confirm_del_pat = pid
+                                st.session_state.editing_patient = None
+                            st.rerun()
+
+                    # ── Edit panel (shown inline below the row) ───────────
+                    if st.session_state.editing_patient == pid:
+                        with st.container():
+                            st.markdown('<div class="edit-panel">', unsafe_allow_html=True)
+                            st.markdown(
+                                f'<p style="color:var(--cyan);font-family:Orbitron,sans-serif;'
+                                f'font-size:.72rem;letter-spacing:.1em;margin-bottom:.8rem">'
+                                f'✏️ EDITING — {p["name"]}</p>',
+                                unsafe_allow_html=True)
+
+                            with st.form(key=f"edit_form_{pid}"):
+                                ef1, ef2 = st.columns(2)
+                                e_name    = ef1.text_input("Full Name",  value=p.get("name", ""))
+                                e_age     = ef2.number_input("Age", 1, 120, int(p.get("age", 30)))
+                                ef3, ef4  = st.columns(2)
+                                gender_opts = ["Male", "Female", "Other"]
+                                cur_gender  = p.get("gender", "Male")
+                                e_gender  = ef3.selectbox(
+                                    "Gender", gender_opts,
+                                    index=gender_opts.index(cur_gender) if cur_gender in gender_opts else 0
+                                )
+                                e_contact = ef4.text_input("Contact", value=p.get("contact", ""))
+                                e_dob     = st.text_input("Date of Birth", value=p.get("dob", ""),
+                                                          placeholder="DD/MM/YYYY (optional)")
+                                e_notes   = st.text_area("Medical History / Notes",
+                                                         value=p.get("notes", ""),
+                                                         placeholder="Relevant history, allergies…")
+
+                                save_col, cancel_col = st.columns(2)
+                                with save_col:
+                                    submitted = st.form_submit_button("💾  Save Changes", use_container_width=True)
+                                with cancel_col:
+                                    cancelled = st.form_submit_button("✖  Cancel", use_container_width=True)
+
+                                if submitted:
+                                    if not e_name.strip():
+                                        st.error("Full name cannot be empty.")
+                                    else:
+                                        # Update scans that reference old name
+                                        old_name = p["name"]
+                                        for sc in scans:
+                                            if sc.get("patient_name") == old_name:
+                                                sc["patient_name"] = e_name.strip()
+                                        # Update patient record
+                                        p["name"]    = e_name.strip()
+                                        p["age"]     = int(e_age)
+                                        p["gender"]  = e_gender
+                                        p["contact"] = e_contact
+                                        p["dob"]     = e_dob
+                                        p["notes"]   = e_notes
+                                        save_data("patients.json", patients)
+                                        save_data("scans.json", scans)
+                                        st.session_state.editing_patient = None
+                                        st.rerun()
+
+                                if cancelled:
+                                    st.session_state.editing_patient = None
+                                    st.rerun()
+
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+                    # ── Delete confirmation (shown inline) ────────────────
+                    if st.session_state.confirm_del_pat == pid:
+                        st.warning(
+                            f"⚠️ Delete **{p['name']}**? This will also remove all their scans. This cannot be undone.")
+                        dc1, dc2 = st.columns(2)
+                        with dc1:
+                            if st.button("✅  Yes, Delete Patient", key=f"yes_del_{pid}"):
+                                delete_patient(pid, patients, scans)
+                                st.session_state.confirm_del_pat = None
+                                st.rerun()
+                        with dc2:
+                            if st.button("❌  Cancel", key=f"no_del_{pid}"):
+                                st.session_state.confirm_del_pat = None
+                                st.rerun()
+
+                    st.markdown("<div style='margin-bottom:.4rem'></div>", unsafe_allow_html=True)
+
+        # ── Add New Patient (right column) ────────────────────────────────
         with pr_right:
             st.markdown('<div class="card"><div class="card-label">Add New Patient</div>',
                         unsafe_allow_html=True)
@@ -852,9 +927,9 @@ def show_app():
                                 unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     #  TAB 4 — PATIENT REPORTS
-    # ═════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
     with t4:
         st.markdown('<div class="sec">📋 Patient Reports</div>', unsafe_allow_html=True)
 
@@ -862,9 +937,7 @@ def show_app():
             st.markdown("""
             <div class="empty-state">
               <span style="font-size:2.5rem;opacity:.2">📋</span>
-              <p style="color:#6a8a9a;font-size:.9rem;margin:0">
-                No patients yet. Add patients and run scans first.
-              </p>
+              <p style="color:#6a8a9a;font-size:.9rem;margin:0">No patients yet.</p>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -875,13 +948,12 @@ def show_app():
             if sel_pat:
                 pt_scans = [s for s in scans if s.get("patient_name") == sel_name]
 
-                # ── Patient summary using native Streamlit (no raw HTML card) ──
                 st.markdown("<br>", unsafe_allow_html=True)
                 pi1, pi2, pi3, pi4 = st.columns(4)
-                pi1.metric("Patient", sel_pat["name"])
+                pi1.metric("Patient",      sel_pat["name"])
                 pi2.metric("Age / Gender", f"{sel_pat.get('age','')} · {sel_pat.get('gender','')}")
-                pi3.metric("Contact", sel_pat.get("contact", "—"))
-                pi4.metric("Total Scans", len(pt_scans))
+                pi3.metric("Contact",      sel_pat.get("contact", "—"))
+                pi4.metric("Total Scans",  len(pt_scans))
 
                 if sel_pat.get("notes"):
                     st.info(f"📝 Medical Notes: {sel_pat['notes']}")
@@ -890,43 +962,39 @@ def show_app():
 
                 if not pt_scans:
                     st.markdown(
-                        '<div class="rbox r-cyan">No scans on record for this patient. '
-                        'Run a Scan Analysis and save it.</div>',
+                        '<div class="rbox r-cyan">No scans on record for this patient.</div>',
                         unsafe_allow_html=True)
                 else:
                     for i, s in enumerate(reversed(pt_scans)):
-                        scan_num  = len(pt_scans) - i
-                        diag      = s.get("diagnosis", "")
-                        conf      = s.get("confidence", 0)
-                        d_color   = "#00e676" if diag == "notumor" else "#ff4d6d"
-                        box_class = "r-green" if diag == "notumor" else ("r-amber" if conf < 0.6 else "r-red")
+                        scan_num     = len(pt_scans) - i
+                        diag         = s.get("diagnosis", "")
+                        conf         = s.get("confidence", 0)
+                        d_color      = "#00e676" if diag == "notumor" else "#ff4d6d"
+                        box_class    = "r-green" if diag == "notumor" else ("r-amber" if conf < 0.6 else "r-red")
                         result_label = "✅ No Tumor Detected" if diag == "notumor" else f"🔴 {diag.upper()} Detected"
+                        scan_id      = s.get("id", f"idx_{i}")
 
                         with st.expander(
                             f"🔬 Scan #{scan_num}  ·  {s.get('date','')}  ·  {diag.upper()}",
                             expanded=(i == 0)
                         ):
-                            # Diagnosis result box
                             st.markdown(
                                 f'<div class="rbox {box_class}">{result_label} &nbsp;·&nbsp; '
                                 f'Confidence: <strong>{conf*100:.1f}%</strong></div>',
                                 unsafe_allow_html=True)
 
-                            # Scan details using native metrics
                             m1, m2, m3 = st.columns(3)
                             m1.metric("Scan Date", s.get("date", "—"))
                             m2.metric("Operator",  s.get("operator", "—"))
-                            m3.metric("Scan ID",   s.get("id", "—"))
+                            m3.metric("Scan ID",   scan_id)
 
-                            # Doctor notes display
                             if s.get("doctor_notes"):
                                 st.markdown(
                                     f'<div class="rbox r-cyan" style="margin-top:.5rem">'
                                     f'<strong>📝 Doctor Notes:</strong> {s["doctor_notes"]}</div>',
                                     unsafe_allow_html=True)
 
-                            # Edit notes inline
-                            with st.form(key=f"note_form_{s.get('id', i)}"):
+                            with st.form(key=f"note_form_{scan_id}"):
                                 new_note = st.text_area(
                                     "Update / Add Doctor Notes",
                                     value=s.get("doctor_notes", ""),
@@ -934,31 +1002,55 @@ def show_app():
                                 )
                                 if st.form_submit_button("💾  Update Notes"):
                                     for sc in scans:
-                                        if sc.get("id") == s.get("id"):
+                                        if sc.get("id") == scan_id:
                                             sc["doctor_notes"] = new_note
                                     save_data("scans.json", scans)
-                                    st.success("Notes updated successfully!")
+                                    st.success("Notes updated!")
                                     st.rerun()
 
-    # ═════════════════════════════════════════════════════════════════════════
-    #  TAB 5 — DASHBOARD / ANALYTICS
-    # ═════════════════════════════════════════════════════════════════════════
+                            st.markdown("---")
+                            st.markdown(
+                                '<p style="color:var(--muted);font-size:.78rem;margin-bottom:.3rem">⚠️ Danger Zone</p>',
+                                unsafe_allow_html=True)
+
+                            if st.session_state.confirm_delete == scan_id:
+                                st.markdown(
+                                    '<div class="rbox r-red" style="margin-top:0">'
+                                    '🗑️ Are you sure? This scan will be permanently deleted.</div>',
+                                    unsafe_allow_html=True)
+                                cy, cn = st.columns(2)
+                                with cy:
+                                    if st.button("✅  Yes, Delete", key=f"yes_{scan_id}"):
+                                        delete_scan(scan_id, scans, patients)
+                                        st.session_state.confirm_delete = None
+                                        st.rerun()
+                                with cn:
+                                    if st.button("❌  Cancel", key=f"no_{scan_id}"):
+                                        st.session_state.confirm_delete = None
+                                        st.rerun()
+                            else:
+                                if st.button(f"🗑️  Delete This Scan", key=f"del_{scan_id}"):
+                                    st.session_state.confirm_delete = scan_id
+                                    st.rerun()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  TAB 5 — DASHBOARD
+    # ═══════════════════════════════════════════════════════════════════════
     with t5:
         st.markdown('<div class="sec">📊 Analytics Dashboard</div>', unsafe_allow_html=True)
 
         total_p  = len(patients)
         total_s  = len(scans)
         tumor_s  = sum(1 for s in scans if s.get("diagnosis") != "notumor")
-        clear_s  = total_s - tumor_s
         det_rate = (tumor_s / total_s * 100) if total_s > 0 else 0
         avg_conf = (sum(s.get("confidence", 0) for s in scans) / total_s * 100) if total_s > 0 else 0
 
         sc1, sc2, sc3, sc4 = st.columns(4)
         for col, icon, num, label in [
-            (sc1, "👥", total_p,             "Total Patients"),
-            (sc2, "🔬", total_s,             "Scans Processed"),
-            (sc3, "📈", f"{det_rate:.1f}%",  "Detection Rate"),
-            (sc4, "🎯", f"{avg_conf:.1f}%",  "Avg Confidence"),
+            (sc1, "👥", total_p,            "Total Patients"),
+            (sc2, "🔬", total_s,            "Scans Processed"),
+            (sc3, "📈", f"{det_rate:.1f}%", "Detection Rate"),
+            (sc4, "🎯", f"{avg_conf:.1f}%", "Avg Confidence"),
         ]:
             col.markdown(f"""
             <div class="stat-card">
@@ -974,9 +1066,7 @@ def show_app():
             st.markdown("""
             <div class="empty-state">
               <span style="font-size:2.5rem;opacity:.2">📊</span>
-              <p style="color:#6a8a9a;font-size:.9rem;margin:0">
-                No scan data yet. Run scans and save them to see analytics.
-              </p>
+              <p style="color:#6a8a9a;font-size:.9rem;margin:0">No scan data yet.</p>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -985,57 +1075,43 @@ def show_app():
             with da1:
                 st.markdown('<div class="sec">🧬 Diagnosis Distribution</div>', unsafe_allow_html=True)
                 diag_counts = Counter(s.get("diagnosis", "unknown") for s in scans)
-                pal_pie = {
-                    'notumor':    '#00e676',
-                    'glioma':     '#ff4d6d',
-                    'meningioma': '#ffab40',
-                    'pituitary':  '#00e5ff',
-                }
-                labels_d  = list(diag_counts.keys())
-                vals_d    = list(diag_counts.values())
-                colors_d  = [pal_pie.get(l, '#6a8a9a') for l in labels_d]
-                fig, ax = dark_fig(5, 3.8)
+                pal_pie = {'notumor': '#00e676', 'glioma': '#ff4d6d',
+                           'meningioma': '#ffab40', 'pituitary': '#00e5ff'}
+                labels_d = list(diag_counts.keys())
+                vals_d   = list(diag_counts.values())
+                colors_d = [pal_pie.get(l, '#6a8a9a') for l in labels_d]
+                fig, ax  = dark_fig(5, 3.8)
                 wedges, texts, autotexts = ax.pie(
-                    vals_d, labels=labels_d, colors=colors_d,
-                    autopct='%1.1f%%', startangle=140,
-                    textprops={'color': '#6a8a9a', 'fontsize': 9},
+                    vals_d, labels=labels_d, colors=colors_d, autopct='%1.1f%%',
+                    startangle=140, textprops={'color': '#6a8a9a', 'fontsize': 9},
                     wedgeprops={'linewidth': 2, 'edgecolor': '#04080f'}
                 )
                 for at in autotexts:
-                    at.set_color('#e8f4f8')
-                    at.set_fontsize(9)
+                    at.set_color('#e8f4f8'); at.set_fontsize(9)
                 ax.set_title('Scan Results Distribution')
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
+                plt.tight_layout(); st.pyplot(fig); plt.close()
 
             with da2:
                 st.markdown('<div class="sec">📅 Daily Scan Volume</div>', unsafe_allow_html=True)
                 date_counts = defaultdict(int)
                 for s in scans:
                     d = s.get("date", "")[:10]
-                    if d:
-                        date_counts[d] += 1
+                    if d: date_counts[d] += 1
                 sorted_dates = sorted(date_counts.keys())
                 fig, ax = dark_fig(5, 3.8)
                 if len(sorted_dates) > 1:
                     y_vals = [date_counts[d] for d in sorted_dates]
                     ax.plot(sorted_dates, y_vals, '.-', color='#00e5ff', lw=2, markersize=8)
-                    ax.fill_between(range(len(sorted_dates)), y_vals,
-                                    alpha=0.15, color='#00e5ff')
+                    ax.fill_between(range(len(sorted_dates)), y_vals, alpha=0.15, color='#00e5ff')
                     ax.set_xticks(range(len(sorted_dates)))
                     ax.set_xticklabels(sorted_dates, rotation=30, ha='right', fontsize=7)
                 elif sorted_dates:
-                    ax.bar(sorted_dates, [date_counts[d] for d in sorted_dates],
-                           color='#00e5ff', width=0.4)
+                    ax.bar(sorted_dates, [date_counts[d] for d in sorted_dates], color='#00e5ff', width=0.4)
                 else:
                     ax.text(0.5, 0.5, 'No date data', ha='center', va='center',
                             color='#6a8a9a', transform=ax.transAxes)
-                ax.set_ylabel("Scans")
-                ax.set_title("Daily Scan Volume")
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
+                ax.set_ylabel("Scans"); ax.set_title("Daily Scan Volume")
+                plt.tight_layout(); st.pyplot(fig); plt.close()
 
             db1, db2 = st.columns(2, gap="medium")
 
@@ -1043,20 +1119,16 @@ def show_app():
                 st.markdown('<div class="sec">🔴 Tumor Type Breakdown</div>', unsafe_allow_html=True)
                 tumor_list = [s for s in scans if s.get("diagnosis") != "notumor"]
                 if tumor_list:
-                    tc     = Counter(s.get("diagnosis") for s in tumor_list)
-                    pal2   = ['#ff4d6d', '#ffab40', '#00e5ff']
+                    tc   = Counter(s.get("diagnosis") for s in tumor_list)
+                    pal2 = ['#ff4d6d', '#ffab40', '#00e5ff']
                     fig, ax = dark_fig(5, 3.2)
-                    bars   = ax.bar(list(tc.keys()), list(tc.values()),
-                                    color=pal2[:len(tc)], width=0.5)
+                    bars = ax.bar(list(tc.keys()), list(tc.values()), color=pal2[:len(tc)], width=0.5)
                     for bar, v in zip(bars, tc.values()):
                         ax.text(bar.get_x() + bar.get_width() / 2,
                                 bar.get_height() + 0.05, str(v),
                                 ha='center', color='#e8f4f8', fontsize=9)
-                    ax.set_ylabel("Count")
-                    ax.set_title("Tumor Type Distribution")
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    plt.close()
+                    ax.set_ylabel("Count"); ax.set_title("Tumor Type Distribution")
+                    plt.tight_layout(); st.pyplot(fig); plt.close()
                 else:
                     st.markdown('<div class="rbox r-green">✅ No tumor cases recorded yet.</div>',
                                 unsafe_allow_html=True)
@@ -1065,17 +1137,14 @@ def show_app():
                 st.markdown('<div class="sec">🎯 AI Confidence Distribution</div>', unsafe_allow_html=True)
                 confs = [s.get("confidence", 0) * 100 for s in scans]
                 fig, ax = dark_fig(5, 3.2)
-                ax.hist(confs, bins=min(10, len(confs)), color='#00e5ff',
-                        alpha=0.8, edgecolor='#04080f', linewidth=1.2)
+                ax.hist(confs, bins=min(10, len(confs)), color='#00e5ff', alpha=0.8,
+                        edgecolor='#04080f', linewidth=1.2)
                 ax.axvline(x=np.mean(confs), color='#ffab40', linestyle='--', lw=1.8,
                            label=f'Mean: {np.mean(confs):.1f}%')
-                ax.set_xlabel("Confidence (%)")
-                ax.set_ylabel("Count")
+                ax.set_xlabel("Confidence (%)"); ax.set_ylabel("Count")
                 ax.set_title("AI Confidence Distribution")
                 ax.legend(facecolor='#0b1220', labelcolor='#e8f4f8', fontsize=8)
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
+                plt.tight_layout(); st.pyplot(fig); plt.close()
 
             st.markdown('<div class="sec">📋 Full Scan History</div>', unsafe_allow_html=True)
             df_rows = []
@@ -1087,12 +1156,11 @@ def show_app():
                     "Diagnosis":  s.get("diagnosis", "").upper(),
                     "Confidence": f"{s.get('confidence', 0)*100:.1f}%",
                     "Operator":   s.get("operator", ""),
-                    "Notes":      s.get("doctor_notes", "")[:40] + "…"
-                                  if len(s.get("doctor_notes","")) > 40
-                                  else s.get("doctor_notes",""),
+                    "Notes":      (s.get("doctor_notes","")[:40] + "…"
+                                   if len(s.get("doctor_notes","")) > 40
+                                   else s.get("doctor_notes","")),
                 })
-            df = pd.DataFrame(df_rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
