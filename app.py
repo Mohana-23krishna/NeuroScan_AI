@@ -193,50 +193,68 @@ div.stButton > button:hover {
   box-shadow: none !important;
 }
 
-/* ══ FIX: Icon edit button — always dark cyan ══ */
+/* ══ FIX: Icon edit button — dark background, contained icon ══ */
 .icon-btn > div.stButton > button,
 .icon-btn > div.stButton > button:focus,
 .icon-btn > div.stButton > button:hover {
   background: #061420 !important;
   border: 1px solid #00e5ff !important;
   color: #00e5ff !important;
-  font-size: .95rem !important;
-  padding: .28rem .55rem !important;
+  font-size: .8rem !important;
+  line-height: 1 !important;
+  padding: 0 !important;
   border-radius: 7px !important;
   letter-spacing: 0 !important;
-  min-width: unset !important;
-  width: auto !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  width: 34px !important;
+  height: 34px !important;
   text-transform: none !important;
   font-family: inherit !important;
   box-shadow: none !important;
   transform: none !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 .icon-btn > div.stButton > button:hover {
   background: rgba(0,229,255,.12) !important;
   box-shadow: 0 0 8px rgba(0,229,255,.2) !important;
+  transform: none !important;
 }
 
-/* ══ FIX: Icon delete button — always dark red ══ */
+/* ══ FIX: Icon delete button — dark background, contained icon ══ */
 .icon-btn-del > div.stButton > button,
 .icon-btn-del > div.stButton > button:focus,
 .icon-btn-del > div.stButton > button:hover {
   background: #1a0608 !important;
   border: 1px solid #ff4d6d !important;
   color: #ff4d6d !important;
-  font-size: .95rem !important;
-  padding: .28rem .55rem !important;
+  font-size: .8rem !important;
+  line-height: 1 !important;
+  padding: 0 !important;
   border-radius: 7px !important;
   letter-spacing: 0 !important;
-  min-width: unset !important;
-  width: auto !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  width: 34px !important;
+  height: 34px !important;
   text-transform: none !important;
   font-family: inherit !important;
   box-shadow: none !important;
   transform: none !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 .icon-btn-del > div.stButton > button:hover {
   background: rgba(255,77,109,.12) !important;
   box-shadow: 0 0 8px rgba(255,77,109,.2) !important;
+  transform: none !important;
 }
 
 /* ══ Save button — dark green ══ */
