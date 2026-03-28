@@ -156,7 +156,7 @@ st.markdown("""
 }
 label { color: var(--muted) !important; font-size: .82rem !important; letter-spacing: .05em; }
 
-/* ══ ALL regular buttons — keep original dark teal style ══ */
+/* ══ ALL regular buttons — dark teal style ══ */
 div.stButton > button {
   background: linear-gradient(135deg, #006680, #008fa6) !important;
   color: #ffffff !important; font-family: 'Orbitron', sans-serif !important;
@@ -170,7 +170,41 @@ div.stButton > button:hover {
   background: linear-gradient(135deg, #007a99, #00b8d9) !important;
 }
 
-/* ══ FIX: Number input +/- buttons — force dark ══ */
+/* ══ PATIENT RECORD ICON BUTTONS ══
+   Streamlit puts the `title` attr (from `help=`) directly on the <button> element.
+   This is the ONLY selector that reliably reaches the button regardless of
+   wrapper structure. Both edit and delete get the site-standard teal gradient. */
+button[title="Update profile"],
+button[title="Delete patient"] {
+  background: linear-gradient(135deg, #006680, #008fa6) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+  padding: 0 !important;
+  font-size: 1rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-family: inherit !important;
+  overflow: hidden !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+button[title="Update profile"]:hover,
+button[title="Delete patient"]:hover {
+  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
+  box-shadow: 0 4px 16px rgba(0,229,255,.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ══ Number input +/- buttons — force dark ══ */
 .stNumberInput [data-testid="stNumberInputField"] { background: var(--surface) !important; }
 .stNumberInput button {
   background: #0b1220 !important;
@@ -191,68 +225,6 @@ div.stButton > button:hover {
   border-color: #00e5ff !important;
   transform: none !important;
   box-shadow: none !important;
-}
-
-/* ══ FIX: Icon edit button — site-standard teal/blue style ══ */
-.icon-btn > div.stButton > button,
-.icon-btn > div.stButton > button:focus {
-  background: linear-gradient(135deg, #006680, #008fa6) !important;
-  border: none !important;
-  color: #ffffff !important;
-  font-size: .85rem !important;
-  line-height: 1 !important;
-  padding: 0 !important;
-  border-radius: 7px !important;
-  letter-spacing: 0 !important;
-  min-width: 34px !important;
-  max-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
-  text-transform: none !important;
-  font-family: inherit !important;
-  box-shadow: none !important;
-  transform: none !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-.icon-btn > div.stButton > button:hover {
-  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
-  box-shadow: 0 4px 16px rgba(0,229,255,.28) !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ══ FIX: Icon delete button — site-standard teal/blue style ══ */
-.icon-btn-del > div.stButton > button,
-.icon-btn-del > div.stButton > button:focus {
-  background: linear-gradient(135deg, #006680, #008fa6) !important;
-  border: none !important;
-  color: #ffffff !important;
-  font-size: .85rem !important;
-  line-height: 1 !important;
-  padding: 0 !important;
-  border-radius: 7px !important;
-  letter-spacing: 0 !important;
-  min-width: 34px !important;
-  max-width: 34px !important;
-  width: 34px !important;
-  height: 34px !important;
-  text-transform: none !important;
-  font-family: inherit !important;
-  box-shadow: none !important;
-  transform: none !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-.icon-btn-del > div.stButton > button:hover {
-  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
-  box-shadow: 0 4px 16px rgba(0,229,255,.28) !important;
-  transform: translateY(-1px) !important;
 }
 
 /* ══ Save button — dark green ══ */
@@ -293,7 +265,7 @@ div.stButton > button:hover {
   transform: none !important;
 }
 
-/* ══ Form submit buttons — same base dark style ══ */
+/* ══ Form submit buttons ══ */
 div.stFormSubmitButton > button {
   background: linear-gradient(135deg, #006680, #008fa6) !important;
   color: #ffffff !important; font-family: 'Orbitron', sans-serif !important;
@@ -760,18 +732,18 @@ def show_app():
                         </div>""", unsafe_allow_html=True)
 
                     with rc_edit:
-                        st.markdown('<div class="icon-btn">', unsafe_allow_html=True)
+                        # help="Update profile" → renders as title="Update profile" on the <button>
+                        # This is targeted by button[title="Update profile"] in the global CSS above
                         if st.button("✏️", key=f"edit_{pid}", help="Update profile"):
                             st.session_state.editing_patient = None if st.session_state.editing_patient==pid else pid
                             st.session_state.confirm_del_pat = None; st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
 
                     with rc_del:
-                        st.markdown('<div class="icon-btn-del">', unsafe_allow_html=True)
+                        # help="Delete patient" → renders as title="Delete patient" on the <button>
+                        # This is targeted by button[title="Delete patient"] in the global CSS above
                         if st.button("🗑️", key=f"del_{pid}", help="Delete patient"):
                             st.session_state.confirm_del_pat = None if st.session_state.confirm_del_pat==pid else pid
                             st.session_state.editing_patient = None; st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
 
                     if st.session_state.editing_patient == pid:
                         st.markdown('<div class="edit-panel">', unsafe_allow_html=True)
