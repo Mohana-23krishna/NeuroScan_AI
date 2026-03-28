@@ -193,14 +193,13 @@ div.stButton > button:hover {
   box-shadow: none !important;
 }
 
-/* ══ FIX: Icon edit button — dark background, contained icon ══ */
+/* ══ FIX: Icon edit button — site-standard teal/blue style ══ */
 .icon-btn > div.stButton > button,
-.icon-btn > div.stButton > button:focus,
-.icon-btn > div.stButton > button:hover {
-  background: #061420 !important;
-  border: 1px solid #00e5ff !important;
-  color: #00e5ff !important;
-  font-size: .8rem !important;
+.icon-btn > div.stButton > button:focus {
+  background: linear-gradient(135deg, #006680, #008fa6) !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: .85rem !important;
   line-height: 1 !important;
   padding: 0 !important;
   border-radius: 7px !important;
@@ -220,19 +219,18 @@ div.stButton > button:hover {
   justify-content: center !important;
 }
 .icon-btn > div.stButton > button:hover {
-  background: rgba(0,229,255,.12) !important;
-  box-shadow: 0 0 8px rgba(0,229,255,.2) !important;
-  transform: none !important;
+  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
+  box-shadow: 0 4px 16px rgba(0,229,255,.28) !important;
+  transform: translateY(-1px) !important;
 }
 
-/* ══ FIX: Icon delete button — dark background, contained icon ══ */
+/* ══ FIX: Icon delete button — site-standard teal/blue style ══ */
 .icon-btn-del > div.stButton > button,
-.icon-btn-del > div.stButton > button:focus,
-.icon-btn-del > div.stButton > button:hover {
-  background: #1a0608 !important;
-  border: 1px solid #ff4d6d !important;
-  color: #ff4d6d !important;
-  font-size: .8rem !important;
+.icon-btn-del > div.stButton > button:focus {
+  background: linear-gradient(135deg, #006680, #008fa6) !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: .85rem !important;
   line-height: 1 !important;
   padding: 0 !important;
   border-radius: 7px !important;
@@ -252,9 +250,9 @@ div.stButton > button:hover {
   justify-content: center !important;
 }
 .icon-btn-del > div.stButton > button:hover {
-  background: rgba(255,77,109,.12) !important;
-  box-shadow: 0 0 8px rgba(255,77,109,.2) !important;
-  transform: none !important;
+  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
+  box-shadow: 0 4px 16px rgba(0,229,255,.28) !important;
+  transform: translateY(-1px) !important;
 }
 
 /* ══ Save button — dark green ══ */
