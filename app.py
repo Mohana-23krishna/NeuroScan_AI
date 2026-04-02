@@ -1096,4 +1096,57 @@ def show_app():
                                   autopct='%1.1f%%',startangle=140,textprops={'color':'#6a8a9a','fontsize':9},
                                   wedgeprops={'linewidth':2,'edgecolor':'#04080f'})
                 for at in ats: at.set_color('#e8f4f8'); at.set_fontsize(9)
-                ax.set_title('Scan Results Distribution'); plt.tight_layout(); st.pyplot(fig
+                ax.set_title('Scan Results Distribution'); plt.tight_layout(); st.pyplot(fig); plt.close()
+
+            with da2:
+                st.markdown('<div class="sec">📅 Daily Scan Volume</div>', unsafe_allow_html=True)
+                date_c = defaultdict(int)
+                for s in scans:
+                    d = s.get("date","")[:10]
+                    if d: date_c[d]+=1
+                sd = sorted(date_c.keys())
+                fig,ax = dark_fig(5,3.8)
+                if len(sd)>1:
+                    yv=[date_c[d] for d in sd]
+                    ax.plot(sd,yv,'.-',color='#00e5ff',lw=2,markersize=8)
+                    ax.fill_between(range(len(sd)),yv,alpha=0.15,color='#00e5ff')
+                    ax.set_xticks(range(len(sd))); ax.set_xticklabels(sd,rotation=30,ha='right',fontsize=7)
+                elif sd: ax.bar(sd,[date_c[d] for d in sd],color='#00e5ff',width=0.4)
+                ax.set_ylabel("Scans"); ax.set_title("Daily Scan Volume"); plt.tight_layout(); st.pyplot(fig); plt.close()
+
+            db1,db2 = st.columns(2,gap="medium")
+            with db1:
+                st.markdown('<div class="sec">🔴 Tumor Type Breakdown</div>', unsafe_allow_html=True)
+                tl=[s for s in scans if s.get("diagnosis")!="notumor"]
+                if tl:
+                    tc=Counter(s.get("diagnosis") for s in tl)
+                    fig,ax=dark_fig(5,3.2)
+                    bars=ax.bar(list(tc.keys()),list(tc.values()),color=['#ff4d6d','#ffab40','#00e5ff'][:len(tc)],width=0.5)
+                    for bar,v in zip(bars,tc.values()): ax.text(bar.get_x()+bar.get_width()/2,bar.get_height()+.05,str(v),ha='center',color='#e8f4f8',fontsize=9)
+                    ax.set_ylabel("Count"); ax.set_title("Tumor Type Distribution"); plt.tight_layout(); st.pyplot(fig); plt.close()
+                else:
+                    st.markdown('<div class="rbox r-green">✅ No tumor cases recorded yet.</div>', unsafe_allow_html=True)
+
+            with db2:
+                st.markdown('<div class="sec">🎯 AI Confidence Distribution</div>', unsafe_allow_html=True)
+                confs=[s.get("confidence",0)*100 for s in scans]
+                fig,ax=dark_fig(5,3.2)
+                ax.hist(confs,bins=min(10,len(confs)),color='#00e5ff',alpha=0.8,edgecolor='#04080f',linewidth=1.2)
+                ax.axvline(x=np.mean(confs),color='#ffab40',linestyle='--',lw=1.8,label=f'Mean: {np.mean(confs):.1f}%')
+                ax.set_xlabel("Confidence (%)"); ax.set_ylabel("Count"); ax.set_title("AI Confidence Distribution")
+                ax.legend(facecolor='#0b1220',labelcolor='#e8f4f8',fontsize=8); plt.tight_layout(); st.pyplot(fig); plt.close()
+
+            st.markdown('<div class="sec">📋 Full Scan History</div>', unsafe_allow_html=True)
+            df_rows=[]
+            for s in reversed(scans):
+                df_rows.append({"Scan ID":s.get("id",""),"Patient":s.get("patient_name",""),
+                                 "Date":s.get("date",""),"Diagnosis":s.get("diagnosis","").upper(),
+                                 "Confidence":f"{s.get('confidence',0)*100:.1f}%","Operator":s.get("operator",""),
+                                 "Notes":(s.get("doctor_notes","")[:40]+"…" if len(s.get("doctor_notes",""))>40 else s.get("doctor_notes",""))})
+            st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
+
+
+if st.session_state.logged_in:
+    show_app()
+else:
+    show_auth()
