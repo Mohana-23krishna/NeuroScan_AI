@@ -42,6 +42,7 @@ for k, v in [
     ("logged_in", False), ("username", ""), ("auth_mode", "login"),
     ("last_scan", None), ("confirm_delete", None),
     ("confirm_del_pat", None), ("editing_patient", None),
+    ("viewing_blood_report", None),
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -170,38 +171,66 @@ div.stButton > button:hover {
   background: linear-gradient(135deg, #007a99, #00b8d9) !important;
 }
 
-/* ══ PATIENT RECORD ICON BUTTONS ══
-   Streamlit puts the `title` attr (from `help=`) directly on the <button> element.
-   This is the ONLY selector that reliably reaches the button regardless of
-   wrapper structure. Both edit and delete get the site-standard teal gradient. */
-button[title="Update profile"],
-button[title="Delete patient"] {
-  background: linear-gradient(135deg, #006680, #008fa6) !important;
-  color: #ffffff !important;
-  border: none !important;
-  border-radius: 8px !important;
-  width: 38px !important;
-  height: 38px !important;
-  min-width: 38px !important;
-  max-width: 38px !important;
-  padding: 0 !important;
-  font-size: 1rem !important;
-  line-height: 1 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  font-family: inherit !important;
-  overflow: hidden !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  box-shadow: none !important;
-  transform: none !important;
+/* ══ EDIT (pencil) icon button — cyan outline style ══ */
+.edit-btn > div.stButton > button {
+  background: linear-gradient(135deg, #031a22, #042a38) !important;
+  border: 1.5px solid rgba(0,229,255,.55) !important;
+  color: #00e5ff !important;
+  width: 38px !important; height: 38px !important;
+  min-width: 38px !important; max-width: 38px !important;
+  padding: 0 !important; font-size: 1rem !important;
+  letter-spacing: 0 !important; text-transform: none !important;
+  font-family: inherit !important; display: inline-flex !important;
+  align-items: center !important; justify-content: center !important;
+  box-shadow: 0 0 8px rgba(0,229,255,.12) !important;
 }
-button[title="Update profile"]:hover,
-button[title="Delete patient"]:hover {
-  background: linear-gradient(135deg, #007a99, #00b8d9) !important;
-  box-shadow: 0 4px 16px rgba(0,229,255,.35) !important;
+.edit-btn > div.stButton > button:hover {
+  background: rgba(0,229,255,.12) !important;
+  border-color: var(--cyan) !important;
+  box-shadow: 0 0 16px rgba(0,229,255,.3) !important;
   transform: translateY(-1px) !important;
+}
+
+/* ══ DELETE (trash) icon button — red outline style ══ */
+.del-btn > div.stButton > button {
+  background: linear-gradient(135deg, #220308, #380612) !important;
+  border: 1.5px solid rgba(255,77,109,.55) !important;
+  color: #ff4d6d !important;
+  width: 38px !important; height: 38px !important;
+  min-width: 38px !important; max-width: 38px !important;
+  padding: 0 !important; font-size: 1rem !important;
+  letter-spacing: 0 !important; text-transform: none !important;
+  font-family: inherit !important; display: inline-flex !important;
+  align-items: center !important; justify-content: center !important;
+  box-shadow: 0 0 8px rgba(255,77,109,.12) !important;
+}
+.del-btn > div.stButton > button:hover {
+  background: rgba(255,77,109,.18) !important;
+  border-color: var(--red) !important;
+  box-shadow: 0 0 16px rgba(255,77,109,.3) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ══ VIEW BLOOD REPORT button — amber style ══ */
+.view-report-btn > div.stButton > button {
+  background: linear-gradient(135deg, #1a0d00, #2a1a00) !important;
+  border: 1.5px solid rgba(255,171,64,.55) !important;
+  color: #ffab40 !important;
+  font-size: .72rem !important; padding: .45rem 1.1rem !important;
+  letter-spacing: .06em !important; font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(255,171,64,.1) !important;
+}
+.view-report-btn > div.stButton > button:hover {
+  background: rgba(255,171,64,.12) !important;
+  border-color: var(--amber) !important;
+  box-shadow: 0 4px 14px rgba(255,171,64,.25) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ══ Blood report viewer panel ══ */
+.blood-report-panel {
+  background: #0c1118; border: 1px solid rgba(255,171,64,.3);
+  border-radius: 12px; padding: 1.2rem 1.4rem; margin-top: .6rem;
 }
 
 /* ══ Number input +/- buttons — force dark ══ */
@@ -732,18 +761,20 @@ def show_app():
                         </div>""", unsafe_allow_html=True)
 
                     with rc_edit:
-                        # help="Update profile" → renders as title="Update profile" on the <button>
-                        # This is targeted by button[title="Update profile"] in the global CSS above
+                        # .edit-btn wrapper → cyan-bordered dark button
+                        st.markdown('<div class="edit-btn">', unsafe_allow_html=True)
                         if st.button("✏️", key=f"edit_{pid}", help="Update profile"):
                             st.session_state.editing_patient = None if st.session_state.editing_patient==pid else pid
                             st.session_state.confirm_del_pat = None; st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                     with rc_del:
-                        # help="Delete patient" → renders as title="Delete patient" on the <button>
-                        # This is targeted by button[title="Delete patient"] in the global CSS above
+                        # .del-btn wrapper → red-bordered dark button
+                        st.markdown('<div class="del-btn">', unsafe_allow_html=True)
                         if st.button("🗑️", key=f"del_{pid}", help="Delete patient"):
                             st.session_state.confirm_del_pat = None if st.session_state.confirm_del_pat==pid else pid
                             st.session_state.editing_patient = None; st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                     if st.session_state.editing_patient == pid:
                         st.markdown('<div class="edit-panel">', unsafe_allow_html=True)
@@ -914,9 +945,63 @@ def show_app():
                     st.markdown(f'<div class="rbox r-amber" style="margin-top:.6rem">⚠️ <strong>Allergies:</strong> {allerg}</div>', unsafe_allow_html=True)
                 if sel_pat.get("notes"):
                     st.markdown(f'<div class="rbox r-cyan" style="margin-top:.5rem">📝 <strong>Notes:</strong> {sel_pat["notes"]}</div>', unsafe_allow_html=True)
+
+                # ── Blood Report — info bar + 👁️ View button ──────────────────
                 br = sel_pat.get("blood_report","")
+                pat_id_key = sel_pat.get("id","")
                 if br and os.path.exists(br):
-                    st.markdown(f'<div class="rbox r-cyan" style="margin-top:.5rem">🧪 <strong>Blood Report on file:</strong> {os.path.basename(br)}</div>', unsafe_allow_html=True)
+                    br_left, br_right = st.columns([3, 1])
+                    with br_left:
+                        st.markdown(
+                            f'<div class="rbox r-amber" style="margin-top:.5rem">'
+                            f'🧪 <strong>Blood Report on file:</strong>&nbsp; {os.path.basename(br)}'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                    with br_right:
+                        st.markdown("<div style='margin-top:.5rem'>", unsafe_allow_html=True)
+                        st.markdown('<div class="view-report-btn">', unsafe_allow_html=True)
+                        is_open   = st.session_state.viewing_blood_report == pat_id_key
+                        btn_label = "🙈  Hide Report" if is_open else "👁️  View Report"
+                        if st.button(btn_label, key=f"view_br_{pat_id_key}", use_container_width=True):
+                            st.session_state.viewing_blood_report = None if is_open else pat_id_key
+                            st.rerun()
+                        st.markdown('</div></div>', unsafe_allow_html=True)
+
+                    # ── Inline viewer panel ────────────────────────────────────
+                    if st.session_state.viewing_blood_report == pat_id_key:
+                        st.markdown('<div class="blood-report-panel">', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<p style="font-family:Orbitron,sans-serif;font-size:.7rem;color:#ffab40;'
+                            f'letter-spacing:.1em;margin:0 0 .8rem">🧪 BLOOD TEST REPORT — {os.path.basename(br)}</p>',
+                            unsafe_allow_html=True
+                        )
+                        ext = os.path.splitext(br)[1].lower()
+                        if ext in [".jpg", ".jpeg", ".png"]:
+                            # Image: render inline
+                            st.image(br, use_container_width=True)
+                        elif ext == ".pdf":
+                            # PDF: offer download (browsers can't render PDF inside Streamlit iframes)
+                            with open(br, "rb") as pdf_f:
+                                pdf_bytes = pdf_f.read()
+                            st.download_button(
+                                label="⬇️  Download PDF Report",
+                                data=pdf_bytes,
+                                file_name=os.path.basename(br),
+                                mime="application/pdf",
+                                key=f"dl_br_{pat_id_key}"
+                            )
+                            st.markdown(
+                                '<div class="rbox r-cyan" style="margin-top:.4rem;font-size:.82rem">'
+                                '📄 PDF files can be downloaded above and viewed in your PDF reader.</div>',
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            st.markdown(
+                                '<div class="rbox r-amber">⚠️ Unsupported format for preview.</div>',
+                                unsafe_allow_html=True
+                            )
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown(f'<div class="sec">🔬 Scan History &nbsp;<span style="font-size:.75rem;color:var(--muted);font-family:\'DM Sans\',sans-serif;font-weight:400">{len(pt_scans)} scan(s)</span></div>', unsafe_allow_html=True)
