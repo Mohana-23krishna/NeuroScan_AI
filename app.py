@@ -157,6 +157,7 @@ st.markdown("""
 }
 label { color: var(--muted) !important; font-size: .82rem !important; letter-spacing: .05em; }
 
+/* ══ ALL regular buttons — dark teal style ══ */
 div.stButton > button {
   background: linear-gradient(135deg, #006680, #008fa6) !important;
   color: #ffffff !important; font-family: 'Orbitron', sans-serif !important;
@@ -170,6 +171,7 @@ div.stButton > button:hover {
   background: linear-gradient(135deg, #007a99, #00b8d9) !important;
 }
 
+/* ══ EDIT (pencil) icon button — cyan outline style ══ */
 .edit-btn > div.stButton > button {
   background: linear-gradient(135deg, #031a22, #042a38) !important;
   border: 1.5px solid rgba(0,229,255,.55) !important;
@@ -189,6 +191,7 @@ div.stButton > button:hover {
   transform: translateY(-1px) !important;
 }
 
+/* ══ DELETE (trash) icon button — red outline style ══ */
 .del-btn > div.stButton > button {
   background: linear-gradient(135deg, #220308, #380612) !important;
   border: 1.5px solid rgba(255,77,109,.55) !important;
@@ -208,6 +211,7 @@ div.stButton > button:hover {
   transform: translateY(-1px) !important;
 }
 
+/* ══ VIEW BLOOD REPORT button — amber style ══ */
 .view-report-btn > div.stButton > button {
   background: linear-gradient(135deg, #1a0d00, #2a1a00) !important;
   border: 1.5px solid rgba(255,171,64,.55) !important;
@@ -223,11 +227,13 @@ div.stButton > button:hover {
   transform: translateY(-1px) !important;
 }
 
+/* ══ Blood report viewer panel ══ */
 .blood-report-panel {
   background: #0c1118; border: 1px solid rgba(255,171,64,.3);
   border-radius: 12px; padding: 1.2rem 1.4rem; margin-top: .6rem;
 }
 
+/* ══ Number input +/- buttons — force dark ══ */
 .stNumberInput [data-testid="stNumberInputField"] { background: var(--surface) !important; }
 .stNumberInput button {
   background: #0b1220 !important;
@@ -250,6 +256,7 @@ div.stButton > button:hover {
   box-shadow: none !important;
 }
 
+/* ══ Save button — dark green ══ */
 .save-btn > div.stButton > button,
 .save-btn > div.stFormSubmitButton > button {
   background: #061a0e !important;
@@ -263,6 +270,7 @@ div.stButton > button:hover {
   transform: none !important;
 }
 
+/* ══ Cancel button — dark red ══ */
 .cancel-btn > div.stButton > button,
 .cancel-btn > div.stFormSubmitButton > button {
   background: #1a0306 !important;
@@ -275,6 +283,7 @@ div.stButton > button:hover {
   transform: none !important;
 }
 
+/* ══ Danger confirm button — dark red ══ */
 .danger-btn > div.stButton > button {
   background: #1a0306 !important;
   border: 1px solid #ff4d6d !important;
@@ -285,6 +294,7 @@ div.stButton > button:hover {
   transform: none !important;
 }
 
+/* ══ Form submit buttons ══ */
 div.stFormSubmitButton > button {
   background: linear-gradient(135deg, #006680, #008fa6) !important;
   color: #ffffff !important; font-family: 'Orbitron', sans-serif !important;
@@ -297,6 +307,7 @@ div.stFormSubmitButton > button:hover {
   box-shadow: 0 6px 22px rgba(0,229,255,.28) !important;
 }
 
+/* ══ File uploader — dark ══ */
 [data-testid="stFileUploader"] {
   background: var(--surface) !important;
   border: 1px dashed var(--cdim) !important;
@@ -321,6 +332,7 @@ div.stFormSubmitButton > button:hover {
   box-shadow: none !important;
 }
 
+/* ══ Expander — dark ══ */
 [data-testid="stExpander"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
@@ -383,19 +395,6 @@ div[data-baseweb="select"] > div { background: var(--surface) !important; border
   background: rgba(255,77,109,.04); border: 1px solid rgba(255,77,109,.25); border-top: none;
   border-radius: 0 0 10px 10px; padding: 1rem 1.4rem; margin-bottom: .5rem;
 }
-
-/* ── MRI validation error box ── */
-.mri-error {
-  background: rgba(255,77,109,.07);
-  border: 1px solid rgba(255,77,109,.4);
-  border-radius: 14px;
-  padding: 2rem 1.5rem;
-  text-align: center;
-  margin-top: .5rem;
-}
-.mri-error-icon { font-size: 2.8rem; margin-bottom: .6rem; }
-.mri-error-title { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #ff4d6d; letter-spacing: .08em; margin-bottom: .4rem; }
-.mri-error-sub { font-size: .82rem; color: #ff8fa3; font-weight: 400; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -469,59 +468,6 @@ def delete_patient(patient_id, patients, scans):
         save_data("scans.json", scans)
     patients[:] = [p for p in patients if p.get("id") != patient_id]
     save_data("patients.json", patients)
-
-def validate_mri_image(uploaded_file):
-    """
-    Uses Claude Vision API to check whether the uploaded image is a brain MRI scan.
-    Returns True if it is, False otherwise.
-    """
-    import base64
-    import requests as req
-
-    img_bytes = uploaded_file.read()
-    uploaded_file.seek(0)                          # reset so keras can read it again
-    b64_img  = base64.b64encode(img_bytes).decode()
-    img_mime = uploaded_file.type or "image/jpeg"
-
-    try:
-        resp = req.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01",
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 10,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": img_mime,
-                                "data": b64_img,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "Is this image a brain MRI scan? "
-                                "Reply ONLY with YES or NO — no other words."
-                            ),
-                        },
-                    ],
-                }],
-            },
-            timeout=20,
-        )
-        answer = resp.json().get("content", [{}])[0].get("text", "").strip().upper()
-        return answer.startswith("YES")
-    except Exception:
-        # If the API call fails for any reason, allow the scan to proceed
-        # so legitimate users aren't blocked by a network hiccup.
-        return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -692,65 +638,35 @@ def show_app():
                 st.markdown('<div class="card"><div class="card-label">Input Scan</div>', unsafe_allow_html=True)
                 st.image(uploaded, width=270)
                 st.markdown('</div>', unsafe_allow_html=True)
-
         with right:
             if uploaded:
                 if not os.path.exists(model_path):
                     st.markdown(f'<div class="rbox r-red">⚠ Model not found: <code>{model_path}</code></div>', unsafe_allow_html=True)
                 else:
                     try:
-                        # ── Step 1: Validate that the image is a brain MRI ────
-                        with st.spinner("🔍 Validating image…"):
-                            is_mri = validate_mri_image(uploaded)
-
-                        if not is_mri:
-                            # ── Reject non-MRI images ─────────────────────────
-                            st.markdown("""
-                            <div class="mri-error">
-                              <div class="mri-error-icon">🚫</div>
-                              <div class="mri-error-title">Upload Correct Image</div>
-                              <div class="mri-error-sub">
-                                Only brain MRI scans are accepted for analysis.<br>
-                                Please upload a valid brain MRI image and try again.
-                              </div>
-                            </div>""", unsafe_allow_html=True)
-
+                        from tensorflow.keras.preprocessing.image import load_img, img_to_array
+                        mdl   = load_saved_model(model_path)
+                        arr   = np.expand_dims(img_to_array(load_img(uploaded, target_size=(IMAGE_SIZE,IMAGE_SIZE)))/255.,0)
+                        preds = mdl.predict(arr)
+                        idx   = int(np.argmax(preds)); conf = float(np.max(preds)); label = CLASS_LABELS[idx]
+                        st.session_state.last_scan = {"diagnosis":label,"confidence":conf,"all_probs":preds[0].tolist(),
+                                                       "date":datetime.now().strftime("%Y-%m-%d %H:%M"),"operator":st.session_state.username}
+                        st.markdown('<div class="card"><div class="card-label">Confidence Scores</div>', unsafe_allow_html=True)
+                        fig, ax = dark_fig(5, 2.8)
+                        colors = ['#00e5ff']*4; colors[idx] = '#00e676' if label=='notumor' else '#ff4d6d'
+                        bars = ax.barh(CLASS_LABELS, preds[0], color=colors, height=0.5)
+                        ax.set_xlim(0,1); ax.set_xlabel("Confidence",fontsize=9)
+                        for bar,v in zip(bars,preds[0]):
+                            ax.text(v+.01,bar.get_y()+bar.get_height()/2,f'{v*100:.1f}%',va='center',color='#6a8a9a',fontsize=8)
+                        plt.tight_layout(); st.pyplot(fig); plt.close()
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        if label=="notumor":
+                            st.markdown(f'<div class="rbox r-green">✅ No Tumor Detected &nbsp;·&nbsp; Confidence: {conf*100:.1f}%</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-cyan">💡 You\'re clear! Maintain healthy habits.</div>', unsafe_allow_html=True)
                         else:
-                            # ── Step 2: Run the VGG16 model ───────────────────
-                            from tensorflow.keras.preprocessing.image import load_img, img_to_array
-                            mdl   = load_saved_model(model_path)
-                            arr   = np.expand_dims(img_to_array(load_img(uploaded, target_size=(IMAGE_SIZE,IMAGE_SIZE)))/255.,0)
-                            preds = mdl.predict(arr)
-                            idx   = int(np.argmax(preds)); conf = float(np.max(preds)); label = CLASS_LABELS[idx]
-                            st.session_state.last_scan = {
-                                "diagnosis":   label,
-                                "confidence":  conf,
-                                "all_probs":   preds[0].tolist(),
-                                "date":        datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                "operator":    st.session_state.username,
-                            }
-
-                            # Confidence bar chart
-                            st.markdown('<div class="card"><div class="card-label">Confidence Scores</div>', unsafe_allow_html=True)
-                            fig, ax = dark_fig(5, 2.8)
-                            colors = ['#00e5ff']*4; colors[idx] = '#00e676' if label=='notumor' else '#ff4d6d'
-                            bars = ax.barh(CLASS_LABELS, preds[0], color=colors, height=0.5)
-                            ax.set_xlim(0,1); ax.set_xlabel("Confidence",fontsize=9)
-                            for bar,v in zip(bars,preds[0]):
-                                ax.text(v+.01,bar.get_y()+bar.get_height()/2,f'{v*100:.1f}%',va='center',color='#6a8a9a',fontsize=8)
-                            plt.tight_layout(); st.pyplot(fig); plt.close()
-                            st.markdown('</div>', unsafe_allow_html=True)
-
-                            # Result banner
-                            if label=="notumor":
-                                st.markdown(f'<div class="rbox r-green">✅ No Tumor Detected &nbsp;·&nbsp; Confidence: {conf*100:.1f}%</div>', unsafe_allow_html=True)
-                                st.markdown('<div class="rbox r-cyan">💡 You\'re clear! Maintain healthy habits.</div>', unsafe_allow_html=True)
-                            else:
-                                bc = "r-amber" if conf<0.6 else "r-red"
-                                tg = "⚠️ Low Confidence" if conf<0.6 else "🔴 High Confidence"
-                                st.markdown(f'<div class="rbox {bc}">{tg} &nbsp;·&nbsp; Tumor: <strong>{label.upper()}</strong> &nbsp;·&nbsp; {conf*100:.1f}%</div>', unsafe_allow_html=True)
-                                st.markdown('<div class="rbox r-amber">⚕️ Consult a neurologist immediately.</div>', unsafe_allow_html=True)
-
+                            bc = "r-amber" if conf<0.6 else "r-red"; tg = "⚠️ Low Confidence" if conf<0.6 else "🔴 High Confidence"
+                            st.markdown(f'<div class="rbox {bc}">{tg} &nbsp;·&nbsp; Tumor: <strong>{label.upper()}</strong> &nbsp;·&nbsp; {conf*100:.1f}%</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="rbox r-amber">⚕️ Consult a neurologist immediately.</div>', unsafe_allow_html=True)
                     except Exception as e:
                         st.markdown(f'<div class="rbox r-red">❌ Error: <code>{e}</code></div>', unsafe_allow_html=True)
             else:
@@ -845,6 +761,7 @@ def show_app():
                         </div>""", unsafe_allow_html=True)
 
                     with rc_edit:
+                        # .edit-btn wrapper → cyan-bordered dark button
                         st.markdown('<div class="edit-btn">', unsafe_allow_html=True)
                         if st.button("✏️", key=f"edit_{pid}", help="Update profile"):
                             st.session_state.editing_patient = None if st.session_state.editing_patient==pid else pid
@@ -852,6 +769,7 @@ def show_app():
                         st.markdown('</div>', unsafe_allow_html=True)
 
                     with rc_del:
+                        # .del-btn wrapper → red-bordered dark button
                         st.markdown('<div class="del-btn">', unsafe_allow_html=True)
                         if st.button("🗑️", key=f"del_{pid}", help="Delete patient"):
                             st.session_state.confirm_del_pat = None if st.session_state.confirm_del_pat==pid else pid
@@ -1028,6 +946,7 @@ def show_app():
                 if sel_pat.get("notes"):
                     st.markdown(f'<div class="rbox r-cyan" style="margin-top:.5rem">📝 <strong>Notes:</strong> {sel_pat["notes"]}</div>', unsafe_allow_html=True)
 
+                # ── Blood Report — info bar + 👁️ View button ──────────────────
                 br = sel_pat.get("blood_report","")
                 pat_id_key = sel_pat.get("id","")
                 if br and os.path.exists(br):
@@ -1049,6 +968,7 @@ def show_app():
                             st.rerun()
                         st.markdown('</div></div>', unsafe_allow_html=True)
 
+                    # ── Inline viewer panel ────────────────────────────────────
                     if st.session_state.viewing_blood_report == pat_id_key:
                         st.markdown('<div class="blood-report-panel">', unsafe_allow_html=True)
                         st.markdown(
@@ -1058,8 +978,10 @@ def show_app():
                         )
                         ext = os.path.splitext(br)[1].lower()
                         if ext in [".jpg", ".jpeg", ".png"]:
+                            # Image: render inline
                             st.image(br, use_container_width=True)
                         elif ext == ".pdf":
+                            # PDF: offer download (browsers can't render PDF inside Streamlit iframes)
                             with open(br, "rb") as pdf_f:
                                 pdf_bytes = pdf_f.read()
                             st.download_button(
@@ -1174,57 +1096,4 @@ def show_app():
                                   autopct='%1.1f%%',startangle=140,textprops={'color':'#6a8a9a','fontsize':9},
                                   wedgeprops={'linewidth':2,'edgecolor':'#04080f'})
                 for at in ats: at.set_color('#e8f4f8'); at.set_fontsize(9)
-                ax.set_title('Scan Results Distribution'); plt.tight_layout(); st.pyplot(fig); plt.close()
-
-            with da2:
-                st.markdown('<div class="sec">📅 Daily Scan Volume</div>', unsafe_allow_html=True)
-                date_c = defaultdict(int)
-                for s in scans:
-                    d = s.get("date","")[:10]
-                    if d: date_c[d]+=1
-                sd = sorted(date_c.keys())
-                fig,ax = dark_fig(5,3.8)
-                if len(sd)>1:
-                    yv=[date_c[d] for d in sd]
-                    ax.plot(sd,yv,'.-',color='#00e5ff',lw=2,markersize=8)
-                    ax.fill_between(range(len(sd)),yv,alpha=0.15,color='#00e5ff')
-                    ax.set_xticks(range(len(sd))); ax.set_xticklabels(sd,rotation=30,ha='right',fontsize=7)
-                elif sd: ax.bar(sd,[date_c[d] for d in sd],color='#00e5ff',width=0.4)
-                ax.set_ylabel("Scans"); ax.set_title("Daily Scan Volume"); plt.tight_layout(); st.pyplot(fig); plt.close()
-
-            db1,db2 = st.columns(2,gap="medium")
-            with db1:
-                st.markdown('<div class="sec">🔴 Tumor Type Breakdown</div>', unsafe_allow_html=True)
-                tl=[s for s in scans if s.get("diagnosis")!="notumor"]
-                if tl:
-                    tc=Counter(s.get("diagnosis") for s in tl)
-                    fig,ax=dark_fig(5,3.2)
-                    bars=ax.bar(list(tc.keys()),list(tc.values()),color=['#ff4d6d','#ffab40','#00e5ff'][:len(tc)],width=0.5)
-                    for bar,v in zip(bars,tc.values()): ax.text(bar.get_x()+bar.get_width()/2,bar.get_height()+.05,str(v),ha='center',color='#e8f4f8',fontsize=9)
-                    ax.set_ylabel("Count"); ax.set_title("Tumor Type Distribution"); plt.tight_layout(); st.pyplot(fig); plt.close()
-                else:
-                    st.markdown('<div class="rbox r-green">✅ No tumor cases recorded yet.</div>', unsafe_allow_html=True)
-
-            with db2:
-                st.markdown('<div class="sec">🎯 AI Confidence Distribution</div>', unsafe_allow_html=True)
-                confs=[s.get("confidence",0)*100 for s in scans]
-                fig,ax=dark_fig(5,3.2)
-                ax.hist(confs,bins=min(10,len(confs)),color='#00e5ff',alpha=0.8,edgecolor='#04080f',linewidth=1.2)
-                ax.axvline(x=np.mean(confs),color='#ffab40',linestyle='--',lw=1.8,label=f'Mean: {np.mean(confs):.1f}%')
-                ax.set_xlabel("Confidence (%)"); ax.set_ylabel("Count"); ax.set_title("AI Confidence Distribution")
-                ax.legend(facecolor='#0b1220',labelcolor='#e8f4f8',fontsize=8); plt.tight_layout(); st.pyplot(fig); plt.close()
-
-            st.markdown('<div class="sec">📋 Full Scan History</div>', unsafe_allow_html=True)
-            df_rows=[]
-            for s in reversed(scans):
-                df_rows.append({"Scan ID":s.get("id",""),"Patient":s.get("patient_name",""),
-                                 "Date":s.get("date",""),"Diagnosis":s.get("diagnosis","").upper(),
-                                 "Confidence":f"{s.get('confidence',0)*100:.1f}%","Operator":s.get("operator",""),
-                                 "Notes":(s.get("doctor_notes","")[:40]+"…" if len(s.get("doctor_notes",""))>40 else s.get("doctor_notes",""))})
-            st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
-
-
-if st.session_state.logged_in:
-    show_app()
-else:
-    show_auth()
+                ax.set_title('Scan Results Distribution'); plt.tight_layout(); st.pyplot(fig
